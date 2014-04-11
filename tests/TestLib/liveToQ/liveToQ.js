@@ -3,9 +3,8 @@
 (function () {
     var qUnitGlobalErrorHandler = window.onerror;
 
-    var numAsserts = 0;
-    var assertFailures = 0;
-    var testLog = "";
+    var testFailed = false;
+    var testError = "";
     var verboseLog = "";
 
     QUnit.config.autostart = false;
@@ -47,16 +46,8 @@
         addOptions();
     });
 
-    function log(message) {
-        if (message) {
-            testLog += " | " + message;
-        }
-    }
-
     function completeTest() {
-        testLog = "" + (numAsserts - assertFailures) + "/" + numAsserts + testLog;
-
-        QUnit.assert.equal(assertFailures, 0, testLog);
+        QUnit.assert.ok(!testFailed, testError);
         QUnit.start();
     }
 
@@ -96,9 +87,8 @@
     }
 
     function cleanUp(testName) {
-        numAsserts = 0;
-        assertFailures = 0;
-        testLog = "";
+        testFailed = false;
+        testError = "";
         verboseLog = "";
 
         qunitDiv.style.zIndex = 0;
@@ -134,80 +124,73 @@
     window.LiveUnit = {
         Assert: {
             areEqual: function (expected, actual, message) {
-                numAsserts++;
                 if (expected !== actual) {
                     if (QUnit.breakOnAssertFail) {
                         debugger;
                     }
-                    assertFailures++;
-                    log(message);
+                    testError = testError || message;
+                    testFailed = true;
                 }
             },
 
             areNotEqual: function (left, right, message) {
-                numAsserts++;
                 if (left === right) {
                     if (QUnit.breakOnAssertFail) {
                         debugger;
                     }
-                    assertFailures++;
-                    log(message);
+                    testError = testError || message;
+                    testFailed = true;
                 }
             },
 
             fail: function (message) {
-                numAsserts++;
                 if (QUnit.breakOnAssertFail) {
                     debugger;
-                    assertFailures++;
-                    log(message);
+                    testError = testError || message;
+                    testFailed = true;
                 }
             },
 
             isFalse: function (falsy, message) {
-                numAsserts++;
                 if (falsy) {
                     if (QUnit.breakOnAssertFail) {
                         debugger;
                     }
-                    assertFailures++;
-                    log(message);
+                    testError = testError || message;
+                    testFailed = true;
                 }
             },
 
             isTrue: function (truthy, message) {
-                numAsserts++;
                 if (!truthy) {
                     if (QUnit.breakOnAssertFail) {
                         debugger;
                     }
-                    assertFailures++;
-                    log(message);
+                    testError = testError || message;
+                    testFailed = true;
                 }
             },
 
             isNull: function (obj, message) {
-                numAsserts++;
                 var pass = obj === null || obj === undefined;
                 if (!pass) {
                     if (QUnit.breakOnAssertFail) {
                         debugger;
                     }
-                    assertFailures++;
-                    log(message);
+                    testError = testError || message;
+                    testFailed = true;
                 }
             },
 
             isNotNull: function (obj, message) {
                 // LiveUnit's null assert also accepts undefined
-                numAsserts++;
                 var pass = obj !== null && obj !== undefined;
                 if (!pass) {
                     if (QUnit.breakOnAssertFail) {
                         debugger;
                     }
-                    assertFailures++;
-                    log(message);
+                    testError = testError || message;
+                    testFailed = true;
                 }
             },
         },
