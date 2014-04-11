@@ -3,6 +3,9 @@
 (function () {
     var qUnitGlobalErrorHandler = window.onerror;
 
+    var numAsserts = 0;
+    var assertFailures = 0;
+    var testLog = "";
     var verboseLog = "";
 
     QUnit.config.autostart = false;
@@ -44,7 +47,18 @@
         addOptions();
     });
 
+    function log(message) {
+        if (message) {
+            testLog += " | " + message;
+        }
+    }
 
+    function completeTest() {
+        testLog = "" + (numAsserts - assertFailures) + "/" + numAsserts + testLog;
+
+        QUnit.assert.equal(assertFailures, 0, testLog);
+        QUnit.start();
+    }
 
     function handleGlobalError(testFunc, error) {
         var expectedException = testFunc["LiveUnit.ExpectedException"];
@@ -59,13 +73,11 @@
                     break;
                 }
             }
-            if (handled) {
-                QUnit.assert.ok(true, "Caught expected exception: " + error);
-            } else {
-                QUnit.assert.ok(false, "Unexpected exception: " + error);
+            if (!handled) {
+                LiveUnit.Assert.fail("Unexpected exception: " + error);
             }
         } else {
-            QUnit.assert.ok(false, "Unexpected exception: " + error);
+            LiveUnit.Assert.fail("Unexpected exception: " + error);
         }
     }
 
@@ -84,20 +96,12 @@
     }
 
     function cleanUp(testName) {
+        numAsserts = 0;
+        assertFailures = 0;
+        testLog = "";
+        verboseLog = "";
+
         qunitDiv.style.zIndex = 0;
-
-        if (document.body.children.length > 2) {
-            for (var i = document.body.children.length - 1; i >= 0; i--) {
-                var child = document.body.children[i];
-                if (child === qunitDiv || child === qunitTestFixtureDiv) {
-                    continue;
-                }
-
-                console.log("Test: " + testName + " - Incomplete cleanup!");
-                WinJS.Utilities.disposeSubTree(child);
-                document.body.removeChild(child);
-            }
-        }
     }
 
     QUnit.testStart(function testStart() {
@@ -105,66 +109,106 @@
     });
 
     QUnit.testDone(function testDone(args) {
-        cleanUp(args.name);
-
         if (args.failed) {
             console.log(args.module + ": " + args.name + ", " + args.passed + "/" + args.total + ", " + args.runtime + "ms");
             console.log(verboseLog);
+        }
+        cleanUp(args.name);
+    });
+
+    QUnit.moduleDone(function (args) {
+        if (document.body.children.length > 2) {
+            for (var i = document.body.children.length - 1; i >= 0; i--) {
+                var child = document.body.children[i];
+                if (child === qunitDiv || child === qunitTestFixtureDiv) {
+                    continue;
+                }
+
+                console.log("Test: " + args.name + " - Incomplete cleanup!");
+                WinJS.Utilities.disposeSubTree(child);
+                document.body.removeChild(child);
+            }
         }
     });
 
     window.LiveUnit = {
         Assert: {
             areEqual: function (expected, actual, message) {
-                if (expected !== actual && QUnit.breakOnAssertFail) {
-                    debugger;
+                numAsserts++;
+                if (expected !== actual) {
+                    if (QUnit.breakOnAssertFail) {
+                        debugger;
+                    }
+                    assertFailures++;
+                    log(message);
                 }
-                QUnit.assert.equal(actual, expected, message);
             },
 
             areNotEqual: function (left, right, message) {
-                if (left === right && QUnit.breakOnAssertFail) {
-                    debugger;
+                numAsserts++;
+                if (left === right) {
+                    if (QUnit.breakOnAssertFail) {
+                        debugger;
+                    }
+                    assertFailures++;
+                    log(message);
                 }
-                QUnit.assert.notEqual(right, left, message);
             },
 
             fail: function (message) {
+                numAsserts++;
                 if (QUnit.breakOnAssertFail) {
                     debugger;
+                    assertFailures++;
+                    log(message);
                 }
-                QUnit.assert.ok(false, message);
             },
 
             isFalse: function (falsy, message) {
-                if (falsy && QUnit.breakOnAssertFail) {
-                    debugger;
+                numAsserts++;
+                if (falsy) {
+                    if (QUnit.breakOnAssertFail) {
+                        debugger;
+                    }
+                    assertFailures++;
+                    log(message);
                 }
-                QUnit.assert.ok(!falsy, message);
             },
 
             isTrue: function (truthy, message) {
-                if (!truthy && QUnit.breakOnAssertFail) {
-                    debugger;
+                numAsserts++;
+                if (!truthy) {
+                    if (QUnit.breakOnAssertFail) {
+                        debugger;
+                    }
+                    assertFailures++;
+                    log(message);
                 }
-                QUnit.assert.ok(truthy, message);
             },
 
             isNull: function (obj, message) {
+                numAsserts++;
                 var pass = obj === null || obj === undefined;
-                if (!pass && QUnit.breakOnAssertFail) {
-                    debugger;
+                if (!pass) {
+                    if (QUnit.breakOnAssertFail) {
+                        debugger;
+                    }
+                    assertFailures++;
+                    log(message);
                 }
-                QUnit.assert.ok(pass, message);
             },
 
             isNotNull: function (obj, message) {
-                var pass = obj !== null && obj !== undefined;
-                if (!pass && QUnit.breakOnAssertFail) {
-                    debugger;
-                }
                 // LiveUnit's null assert also accepts undefined
-                QUnit.assert.ok(pass, message);
+                numAsserts++;
+                var pass = obj !== null && obj !== undefined;
+                if (!pass) {
+                    if (QUnit.breakOnAssertFail) {
+                        debugger;
+                    }
+                    assertFailures++;
+                    log(message);
+                }
             },
         },
 
@@ -222,34 +266,30 @@
                 if (testFunc.length) {
                     // Async WebUnit tests take a 'complete' parameter
                     QUnit.asyncTest(testName, function () {
-                        verboseLog = "";
                         hookupGlobalErrorHandler(testFunc);
-                        QUnit.assert.ok(true, "Test Started");
                         var error = false;
                         try {
                             testFunc.call(testModule, function () {
                                 if (!error) {
-                                    QUnit.start();
+                                    completeTest();
                                 }
                             });
                         } catch (e) {
                             handleGlobalError(testFunc, e.message);
-                            QUnit.start();
+                            completeTest();
                             error = true;
                         }
                     });
                 } else {
                     QUnit.asyncTest(testName, function () {
-                        verboseLog = "";
                         hookupGlobalErrorHandler(testFunc);
-                        QUnit.assert.ok(true, "Test Started");
                         try {
                             testFunc.call(testModule);
-                            QUnit.start();
+                            completeTest();
                         }
                         catch (e) {
                             handleGlobalError(testFunc, e.message);
-                            QUnit.start();
+                            completeTest();
                         }
                     });
                 }
